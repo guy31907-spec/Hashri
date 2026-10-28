@@ -1,0 +1,6 @@
+{
+  "name": "DOCUFIDÈLE - Convertisseur Documents en E-mails HTML & PDF",
+  "description": "Transformez vos PDF, DOCX, JPG et PNG en e-mails HTML fidèles à l'original et compatibles toutes messageries, avec export PDF et préservation des logos et signatures.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
