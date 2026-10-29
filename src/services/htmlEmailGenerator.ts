@@ -4,6 +4,7 @@
  */
 
 import { ParsedDocument, DocumentVariables, RecipientDownloadConfig, ExtractedBlock } from '../types/document';
+import { getEffectiveImageUrl } from './imageHostingService';
 
 /**
  * Replaces variable placeholders in text
@@ -49,65 +50,68 @@ function autolinkText(str: string): string {
 /**
  * Generates an email-compatible HTML string adhering strictly to table layout
  * and inline styles for Gmail, Outlook, Kit, Apple Mail, and Thunderbird.
+ * Guarantees that ALL text is real editable text and images use hosted or base64 URLs.
  */
 export function generateEmailHtml(
   doc: ParsedDocument,
   variables: DocumentVariables,
   downloadConfig: RecipientDownloadConfig
 ): string {
-  // 1. Recipient download / attachment section
+  // 1. Recipient download / attachment section (STRICTLY OPTIONAL)
   let downloadSectionHtml = '';
-  if (
-    (downloadConfig.mode === 'download_button' || downloadConfig.mode === 'both') &&
-    downloadConfig.downloadUrl &&
-    downloadConfig.downloadUrl.trim().length > 0
-  ) {
-    const validUrl = escapeHtml(downloadConfig.downloadUrl.trim());
-    const buttonLabel = escapeHtml(downloadConfig.buttonLabel || 'Télécharger le document PDF original');
-    const notice = escapeHtml(downloadConfig.securityNotice || 'Lien sécurisé vers le document officiel certifié conforme.');
-    const expiryText = downloadConfig.expiresInDays ? `Validité : ${downloadConfig.expiresInDays} jours` : '';
+  if (downloadConfig.enabled) {
+    if (
+      (downloadConfig.mode === 'download_button' || downloadConfig.mode === 'both') &&
+      downloadConfig.downloadUrl &&
+      downloadConfig.downloadUrl.trim().length > 0
+    ) {
+      const validUrl = escapeHtml(downloadConfig.downloadUrl.trim());
+      const buttonLabel = escapeHtml(downloadConfig.buttonLabel || 'Télécharger le document PDF original');
+      const notice = escapeHtml(downloadConfig.securityNotice || 'Lien sécurisé vers le document officiel certifié conforme.');
+      const expiryText = downloadConfig.expiresInDays ? `Validité : ${downloadConfig.expiresInDays} jours` : '';
 
-    downloadSectionHtml = `
-      <!-- BOUTON DE TÉLÉCHARGEMENT SÉCURISÉ POUR LE DESTINATAIRE -->
-      <tr>
-        <td align="center" style="padding: 24px 20px; background-color: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 2px solid #e2e8f0;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
-            <tr>
-              <td align="center" style="border-radius: 6px; background-color: #0f172a;">
-                <!--[if mso]>
-                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${validUrl}" style="height:44px;v-text-anchor:middle;width:340px;" arcsize="14%" stroke="f" fillcolor="#0f172a">
-                  <w:anchorlock/>
-                  <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">${buttonLabel}</center>
-                </v:roundrect>
-                <![endif]-->
-                <a href="${validUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 12px 28px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: bold; color: #ffffff; text-decoration: none; border-radius: 6px; background-color: #0f172a; mso-padding-alt: 0;">
-                  📄 &nbsp; ${buttonLabel}
-                </a>
-              </td>
-            </tr>
-          </table>
-          <p style="margin: 10px 0 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 15px; color: #64748b; text-align: center;">
-            🔒 ${notice} ${expiryText ? '· ' + expiryText : ''}
-          </p>
-        </td>
-      </tr>
-    `;
-  } else if (downloadConfig.mode === 'attachment' || downloadConfig.mode === 'both') {
-    downloadSectionHtml = `
-      <!-- NOTIFICATION PIÈCE JOINTE DIRECTE -->
-      <tr>
-        <td style="padding: 16px 24px; background-color: #f8fafc; border-top: 1px dashed #cbd5e1; border-bottom: 1px dashed #cbd5e1;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            <tr>
-              <td width="30" valign="middle" style="font-size: 20px;">📎</td>
-              <td valign="middle" style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 18px; color: #334155;">
-                <strong>Document joint directement :</strong> Le document officiel au format PDF est annexé en pièce jointe de ce message pour consultation et archivage immédiat.
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    `;
+      downloadSectionHtml = `
+        <!-- BOUTON DE TÉLÉCHARGEMENT SÉCURISÉ POUR LE DESTINATAIRE (OPTIONNEL) -->
+        <tr>
+          <td align="center" style="padding: 24px 20px; background-color: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 2px solid #e2e8f0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+              <tr>
+                <td align="center" style="border-radius: 6px; background-color: #0f172a;">
+                  <!--[if mso]>
+                  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${validUrl}" style="height:44px;v-text-anchor:middle;width:340px;" arcsize="14%" stroke="f" fillcolor="#0f172a">
+                    <w:anchorlock/>
+                    <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">${buttonLabel}</center>
+                  </v:roundrect>
+                  <![endif]-->
+                  <a href="${validUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 12px 28px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: bold; color: #ffffff; text-decoration: none; border-radius: 6px; background-color: #0f172a; mso-padding-alt: 0;">
+                    📄 &nbsp; ${buttonLabel}
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin: 10px 0 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 15px; color: #64748b; text-align: center;">
+              🔒 ${notice} ${expiryText ? '· ' + expiryText : ''}
+            </p>
+          </td>
+        </tr>
+      `;
+    } else if (downloadConfig.mode === 'attachment' || downloadConfig.mode === 'both') {
+      downloadSectionHtml = `
+        <!-- NOTIFICATION PIÈCE JOINTE DIRECTE -->
+        <tr>
+          <td style="padding: 16px 24px; background-color: #f8fafc; border-top: 1px dashed #cbd5e1; border-bottom: 1px dashed #cbd5e1;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td width="30" valign="middle" style="font-size: 20px;">📎</td>
+                <td valign="middle" style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 18px; color: #334155;">
+                  <strong>Document joint directement :</strong> Le document officiel au format PDF est annexé en pièce jointe de ce message pour consultation et archivage immédiat.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      `;
+    }
   }
 
   // 2. Optional Intro message (e.g. customized greeting above the document)
@@ -130,8 +134,6 @@ export function generateEmailHtml(
     // -------------------------------------------------------------
     // MODULE 1 : REPRODUCTION VISUELLE 100% FIDÈLE (PIXEL-PERFECT)
     // -------------------------------------------------------------
-    // Uses the exact high-resolution rendered pages directly from the original document!
-    // Guarantees zero missing elements, exact Canada logo, exact spacing, exact text.
     const pagesHtml = (doc.originalPageImages || []).map((pageDataUrl, pageIdx) => {
       const pageNum = pageIdx + 1;
       const pageSep = pageIdx > 0 ? `<tr><td height="16" style="background-color: #f1f5f9; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>` : '';
@@ -154,11 +156,12 @@ export function generateEmailHtml(
     `;
   } else {
     // -------------------------------------------------------------
-    // MODULE 2 : TRANSCRIPTION TYPOGRAPHIQUE LINÉAIRE PAR FLUX
+    // MODULE 2 : TRANSCRIPTION TYPOGRAPHIQUE HYBRIDE (TEXTE 100% ÉDITABLE DANS GMAIL/OUTLOOK)
     // -------------------------------------------------------------
-    // Renders the extracted document sequentially without scrambling into arbitrary columns!
+    // Renders real semantic text with inline styles so the user can edit ANY text inside Gmail!
+    // And discrete images for logos, signatures, and QR codes using hosted or base64 URLs.
     const blocksHtml = doc.blocks.map((block) => {
-      return renderLinearBlock(block, variables);
+      return renderLinearBlock(block, variables, !!doc.preferHostedImages);
     }).join('\n');
 
     bodyContentHtml = `
@@ -221,7 +224,7 @@ export function generateEmailHtml(
           <tr>
             <td align="center" style="padding: 14px 20px; background-color: #f8fafc; border-top: 1px solid #e2e8f0;">
               <p style="margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 16px; color: #94a3b8; text-align: center;">
-                Ce document a été transcrit via <strong>DOCUFIDÈLE</strong> en garantissant une fidélité intégrale et la préservation stricte des éléments graphiques d'origine.
+                Ce document a été transcrit via <strong>DOCUFIDÈLE</strong> en garantissant une fidélité intégrale et la modifiabilité complète des textes.
               </p>
             </td>
           </tr>
@@ -240,9 +243,9 @@ export function generateEmailHtml(
 }
 
 /**
- * Renders a block in linear natural flow
+ * Renders a block in linear natural flow with real editable text and discrete images
  */
-function renderLinearBlock(block: ExtractedBlock, variables: DocumentVariables): string {
+function renderLinearBlock(block: ExtractedBlock, variables: DocumentVariables, preferHosted: boolean): string {
   const content = interpolateVariables(block.currentText || block.originalText || '', variables);
   const st = block.style || {};
   const fontSize = st.fontSize ? `${st.fontSize}px` : '13px';
@@ -255,18 +258,30 @@ function renderLinearBlock(block: ExtractedBlock, variables: DocumentVariables):
 
   switch (block.type) {
     case 'image':
-    case 'signature_stamp': {
-      if (!block.imageDataUrl) return '';
-      const w = block.imageWidth || 200;
+    case 'signature_stamp':
+    case 'qr_code':
+    case 'barcode': {
+      const imgUrl = getEffectiveImageUrl(block, preferHosted);
+      if (!imgUrl) return '';
+      const w = block.imageWidth || (block.type === 'qr_code' ? 100 : block.type === 'barcode' ? 200 : 180);
       const al = block.imageAlignment || 'left';
       return `
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${al}" style="margin-top: ${marginTop}; margin-bottom: ${marginBot};">
           <tr>
             <td align="${al}">
-              <img src="${block.imageDataUrl}" alt="${escapeHtml(block.label)}" width="${w}" style="display: block; max-width: 100%; height: auto; border: 0;" />
+              <img src="${imgUrl}" alt="${escapeHtml(block.label)}" width="${w}" style="display: block; max-width: 100%; height: auto; border: 0;" />
             </td>
           </tr>
         </table>
+      `;
+    }
+
+    case 'watermark': {
+      const opacity = block.watermarkOpacity || 0.15;
+      return `
+        <div style="text-align: center; margin: 16px 0; opacity: ${opacity}; font-family: Arial, sans-serif; font-size: 28px; font-weight: bold; color: #94a3b8; letter-spacing: 4px; text-transform: uppercase;">
+          ${escapeHtml(content || 'CONFIDENTIEL')}
+        </div>
       `;
     }
 

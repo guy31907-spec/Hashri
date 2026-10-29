@@ -14,13 +14,12 @@ export type BlockType =
   | 'link'
   | 'table'
   | 'image'
+  | 'watermark'
   | 'signature_stamp'
   | 'qr_code'
   | 'barcode'
   | 'footer'
   | 'separator';
-
-export type ReproductionMode = 'pixel_perfect' | 'flow_text';
 
 export type LayoutSection = 
   | 'header_left'
@@ -35,6 +34,8 @@ export type LayoutSection =
   | 'footer'
   | 'custom';
 
+export type ReproductionMode = 'pixel_perfect' | 'flow_text';
+
 export interface BlockStyle {
   fontSize?: number; // in px, e.g. 10, 12, 13, 14, 16, 20
   fontWeight?: 'normal' | '500' | '600' | 'bold' | '800';
@@ -48,6 +49,7 @@ export interface BlockStyle {
   padding?: string;
   border?: string;
   borderRadius?: string;
+  opacity?: number;
 }
 
 export interface ExtractedBlock {
@@ -59,12 +61,15 @@ export interface ExtractedBlock {
   originalText?: string;
   currentText: string;
   linkUrl?: string;
-  imageDataUrl?: string; // Isolated image or page slice
+  imageDataUrl?: string; // Local Base64
+  hostedUrl?: string; // Public free hosted HTTPS URL (Catbox, ImgBB, etc.)
   imageCaption?: string;
   imageWidth?: number; // max width in px
   imageAlignment?: 'left' | 'center' | 'right';
   isLocked: boolean; // Protects genuine logos and signatures against tampering
   isOriginalAsset: boolean;
+  isWatermark?: boolean;
+  watermarkOpacity?: number;
   qrData?: string;
   barcodeData?: string;
   tableData?: {
@@ -88,7 +93,8 @@ export interface DocumentVariables {
 }
 
 export interface RecipientDownloadConfig {
-  mode: 'attachment' | 'download_button' | 'both' | 'none';
+  enabled: boolean; // Strictly optional, user chooses whether to include or not!
+  mode: 'attachment' | 'download_button' | 'both';
   downloadUrl: string; // Required if mode includes download_button
   buttonLabel: string;
   securityNotice: string;
@@ -103,8 +109,9 @@ export interface ParsedDocument {
   originalFileBlob?: Blob;
   originalFileArrayBuffer?: ArrayBuffer;
   pageCount: number;
-  originalPageImages: string[]; // High-res canvas render of original pages for 100% pixel-perfect mode & side-by-side
+  originalPageImages: string[]; // High-res canvas render of original pages
   reproductionMode: ReproductionMode;
+  preferHostedImages?: boolean; // Toggle between hosted URLs and Base64 in exported email
   includeIntroBanner: boolean;
   introMessage: string;
   blocks: ExtractedBlock[];
@@ -116,8 +123,11 @@ export interface ParsedDocument {
     extractedImagesCount: number;
     hasOriginalSignature: boolean;
     hasOriginalStamp: boolean;
+    hasWatermark?: boolean;
     hasQrCode: boolean;
     hasBarcode: boolean;
+    dominantColor?: string;
+    backgroundColor?: string;
     parsingDate: string;
   };
   downloadConfig: RecipientDownloadConfig;

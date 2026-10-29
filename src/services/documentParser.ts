@@ -339,6 +339,7 @@ export async function parsePdfFile(file: File): Promise<ParsedDocument> {
       parsingDate: new Date().toLocaleDateString('fr-FR'),
     },
     downloadConfig: {
+      enabled: false,
       mode: 'attachment',
       downloadUrl: '',
       buttonLabel: 'Télécharger le document PDF original',
@@ -503,6 +504,7 @@ export async function parseDocxFile(file: File): Promise<ParsedDocument> {
       parsingDate: new Date().toLocaleDateString('fr-FR'),
     },
     downloadConfig: {
+      enabled: false,
       mode: 'attachment',
       downloadUrl: '',
       buttonLabel: 'Télécharger le document original',
@@ -567,6 +569,7 @@ export async function parseImageFile(file: File): Promise<ParsedDocument> {
       parsingDate: new Date().toLocaleDateString('fr-FR'),
     },
     downloadConfig: {
+      enabled: false,
       mode: 'attachment',
       downloadUrl: '',
       buttonLabel: 'Télécharger le document original',

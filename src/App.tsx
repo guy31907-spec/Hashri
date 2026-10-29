@@ -48,6 +48,7 @@ export default function App() {
     message: '',
   });
   const [downloadConfig, setDownloadConfig] = useState<RecipientDownloadConfig>({
+    enabled: false,
     mode: 'attachment',
     downloadUrl: '',
     buttonLabel: 'Télécharger le document PDF officiel',
@@ -61,6 +62,7 @@ export default function App() {
   const [isRecipientModalOpen, setIsRecipientModalOpen] = useState<boolean>(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
+  const [isExportingWord, setIsExportingWord] = useState<boolean>(false);
 
   // Hidden container ref for crisp PDF rendering with html2canvas
   const pdfCaptureContainerRef = useRef<HTMLDivElement>(null);
@@ -69,7 +71,10 @@ export default function App() {
   const handleDocumentLoaded = (newDoc: ParsedDocument) => {
     setDocument(newDoc);
     setVariables(newDoc.variables);
-    setDownloadConfig(newDoc.downloadConfig);
+    setDownloadConfig({
+      ...newDoc.downloadConfig,
+      enabled: newDoc.downloadConfig?.enabled ?? false,
+    });
   };
 
   // Re-generate email HTML whenever document, variables, or downloadConfig change
@@ -88,6 +93,22 @@ export default function App() {
     setDocument({
       ...document,
       blocks: document.blocks.map((b) => (b.id === blockId ? { ...b, ...updatedBlock } : b)),
+    });
+  };
+
+  const handleAddBlock = (newBlock: ExtractedBlock) => {
+    if (!document) return;
+    setDocument({
+      ...document,
+      blocks: [...document.blocks, newBlock],
+    });
+  };
+
+  const handleDeleteBlock = (blockId: string) => {
+    if (!document) return;
+    setDocument({
+      ...document,
+      blocks: document.blocks.filter((b) => b.id !== blockId),
     });
   };
 
@@ -123,6 +144,39 @@ export default function App() {
   const handleNewDocument = () => {
     setDocument(null);
   };
+
+  const handleExportWordDocx = async () => {
+    if (!document) return;
+    try {
+      setIsExportingWord(true);
+      const { exportToWordDocx } = await import('./services/wordExporter');
+      await exportToWordDocx(document, variables, downloadConfig);
+    } catch (err) {
+      console.error('Erreur export Word:', err);
+    } finally {
+      setIsExportingWord(false);
+    }
+  };
+
+  // Document analysis statistics
+  const analysisStats = useMemo(() => {
+    if (!document) return null;
+    const logos = document.blocks.filter((b) => b.isOriginalAsset && (b.type === 'image' || b.type === 'header'));
+    const signatures = document.blocks.filter((b) => b.type === 'signature_stamp');
+    const watermarks = document.blocks.filter((b) => b.type === 'watermark' || b.isWatermark);
+    const codes = document.blocks.filter((b) => b.type === 'qr_code' || b.type === 'barcode');
+    const tables = document.blocks.filter((b) => b.type === 'table');
+    const texts = document.blocks.filter((b) => ['heading', 'paragraph', 'salutation', 'metadata_line'].includes(b.type));
+    return {
+      logosCount: logos.length,
+      signaturesCount: signatures.length,
+      watermarksCount: watermarks.length,
+      codesCount: codes.length,
+      tablesCount: tables.length,
+      textsCount: texts.length,
+      totalBlocks: document.blocks.length,
+    };
+  }, [document]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
@@ -203,14 +257,25 @@ export default function App() {
                   type="button"
                   onClick={() => setIsRecipientModalOpen(true)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg border flex items-center transition-colors ${
-                    downloadConfig.mode === 'download_button' && downloadConfig.downloadUrl
-                      ? 'bg-blue-50 text-blue-900 border-blue-200'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    downloadConfig.enabled
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                   }`}
-                  title="Configurer la mise à disposition pour le destinataire"
+                  title="Configurer le bouton de téléchargement pour le destinataire (Optionnel)"
                 >
                   <LinkIcon className="w-3.5 h-3.5 mr-1.5 text-blue-700" />
-                  Bouton / Pièce Jointe
+                  <span>Bouton Destinataire {downloadConfig.enabled ? '(Activé)' : '(Désactivé)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportWordDocx}
+                  disabled={isExportingWord}
+                  className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 font-bold text-xs rounded-lg shadow-xs flex items-center transition-colors disabled:opacity-50"
+                  title="Télécharger le document sous format Microsoft Word (.docx)"
+                >
+                  <Download className="w-3.5 h-3.5 mr-1.5 text-sky-700" />
+                  {isExportingWord ? 'Export en cours...' : 'Word (.docx)'}
                 </button>
 
                 <button
@@ -241,6 +306,61 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {/* Document Structural Analysis Banner */}
+            {analysisStats && (
+              <div className="bg-gradient-to-r from-slate-900 to-blue-950 text-white rounded-xl p-4 shadow-sm border border-slate-800">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                      Analyse Structurelle Précise du Document Source
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    Préservation intégrale des dimensions, marges, polices & graphismes originaux
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+                  <div className="bg-slate-800/80 rounded-lg p-2 border border-slate-700/60">
+                    <span className="text-slate-400 text-[10px] block font-medium">Logos Originaux</span>
+                    <span className="font-bold text-emerald-400 text-sm">
+                      {analysisStats.logosCount > 0 ? `${analysisStats.logosCount} détecté(s)` : 'Extraction visuelle'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-800/80 rounded-lg p-2 border border-slate-700/60">
+                    <span className="text-slate-400 text-[10px] block font-medium">Signatures / Cachets</span>
+                    <span className="font-bold text-emerald-400 text-sm">
+                      {analysisStats.signaturesCount > 0 ? `${analysisStats.signaturesCount} certifié(s)` : 'Préservé'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-800/80 rounded-lg p-2 border border-slate-700/60">
+                    <span className="text-slate-400 text-[10px] block font-medium">Codes QR & Barres</span>
+                    <span className="font-bold text-emerald-400 text-sm">
+                      {analysisStats.codesCount > 0 ? `${analysisStats.codesCount} actif(s)` : 'Zéro faux code'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-800/80 rounded-lg p-2 border border-slate-700/60">
+                    <span className="text-slate-400 text-[10px] block font-medium">Filigranes</span>
+                    <span className="font-bold text-blue-300 text-sm">
+                      {analysisStats.watermarksCount > 0 ? `${analysisStats.watermarksCount} géré(s)` : 'Conforme'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-800/80 rounded-lg p-2 border border-slate-700/60">
+                    <span className="text-slate-400 text-[10px] block font-medium">Blocs & Tableaux</span>
+                    <span className="font-bold text-amber-300 text-sm">
+                      {analysisStats.totalBlocks} éléments
+                    </span>
+                  </div>
+                  <div className="bg-slate-800/80 rounded-lg p-2 border border-slate-700/60">
+                    <span className="text-slate-400 text-[10px] block font-medium">Édition Gmail/Outlook</span>
+                    <span className="font-bold text-emerald-400 text-sm">
+                      100% Modifiable
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Mode-specific workbench if assisted */}
             {mode === 'assisted' && (
@@ -285,13 +405,16 @@ export default function App() {
               hasModifications={hasModifications}
             />
 
-            {/* Side By Side Comparison Viewer */}
+            {/* Side By Side Comparison Viewer with Visual WYSIWYG Editor */}
             <SideBySideViewer
               document={document}
               variables={variables}
               emailHtml={emailHtml}
               onOpenHtmlModal={() => setIsHtmlModalOpen(true)}
               onOpenPdfModal={() => setIsPdfModalOpen(true)}
+              onUpdateBlock={handleUpdateBlock}
+              onAddBlock={handleAddBlock}
+              onDeleteBlock={handleDeleteBlock}
             />
           </div>
         )}
@@ -321,7 +444,10 @@ export default function App() {
             isOpen={isHtmlModalOpen}
             onClose={() => setIsHtmlModalOpen(false)}
             emailHtml={emailHtml}
-            fileName={document.fileName}
+            document={document}
+            variables={variables}
+            downloadConfig={downloadConfig}
+            onUpdateDocument={setDocument}
           />
 
           <PdfExportModal
